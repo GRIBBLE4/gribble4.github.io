@@ -1,0 +1,6 @@
+git clone https://github.com/username/repository.git
+cd repository
+echo '{"key": "value"}' > data.json
+git add data.json
+git commit -m "Add JSON file"
+git push
