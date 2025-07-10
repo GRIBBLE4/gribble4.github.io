@@ -9,13 +9,14 @@ jobs:
   update-news:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write  # Необходимо для push
+      pull-requests: write  # Для создания PR (если используется вариант с PR)
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # Полная история коммитов
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -45,25 +46,29 @@ jobs:
           git add news.json
           git commit -m "Auto-update news [skip ci]" || echo "No changes to commit"
 
-      - name: Push changes
+      - name: Push changes (safe method)
         run: |
-          # Reset to clean state
-          git reset --hard HEAD
-          git clean -fd
+          # Получаем последние изменения
+          git fetch origin main
           
-          # Fetch latest changes
-          git fetch origin
+          # Создаем временную ветку на основе актуального main
+          git checkout -b news-update origin/main
           
-          # Reset to origin/main and overwrite news.json
-          git reset --hard origin/main
-          git checkout HEAD -- news.json
+          # Копируем наш обновленный файл
+          cp ../news.json ./
           
-          # Add and commit again
+          # Коммитим изменения
           git add news.json
-          git commit -m "Auto-update news [skip ci]" || echo "No changes to commit"
+          git commit -m "Auto-update news [skip ci]"
           
-          # Push with force if needed
-          git push origin main || git push origin main --force
+          # Пушим изменения
+          git push origin news-update:main --force-with-lease
+          
+          # Альтернативный вариант (если предыдущий не сработает)
+          if [ $? -ne 0 ]; then
+            echo "Retrying with full force push..."
+            git push origin news-update:main --force
+          fi
 
       - name: Upload debug files
         uses: actions/upload-artifact@v4
