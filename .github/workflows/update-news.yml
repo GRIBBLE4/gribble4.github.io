@@ -2,20 +2,20 @@ name: Update Telegram News
 
 on:
   schedule:
-    - cron: '0 */4 * * *'  # Каждые 4 часа
+    - cron: '0 */4 * * *'
   workflow_dispatch:
 
 jobs:
   update-news:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Необходимо для push
+      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Полная история коммитов
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -23,37 +23,32 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: |
-          npm install axios cheerio
+        run: npm install axios cheerio
 
-      - name: Run news fetcher
+      - name: Fetch and save news
         run: node scripts/fetch-news.js
 
       - name: Verify news.json
         run: |
           if [ ! -f "news.json" ]; then
-            echo "Error: news.json not created!"
+            echo "❌ news.json not found!"
             exit 1
           fi
+          echo "✅ news.json exists"
+          echo "Size: $(wc -c < news.json) bytes"
           echo "Last updated: $(jq -r '.lastUpdated' news.json)"
-          echo "Posts count: $(jq -r '.postsCount' news.json)"
 
-      - name: Commit and push changes
+      - name: Commit changes
         run: |
-          git config --global user.name "GitHub Actions Bot"
+          git config --global user.name "GitHub Actions"
           git config --global user.email "actions@users.noreply.github.com"
-          
           git add news.json
-          
-          # Проверяем изменения
-          if git diff-index --quiet HEAD --; then
-            echo "No changes to commit"
-          else
-            git commit -m "Auto-update news [skip ci]"
-            git pull --rebase origin main  # Избегаем конфликтов
-            git push origin main
-            echo "Changes pushed successfully"
-          fi
+          git commit -m "Auto-update news [skip ci]" || echo "No changes to commit"
+
+      - name: Push changes
+        run: |
+          git pull --rebase
+          git push origin main
 
       - name: Upload debug files
         uses: actions/upload-artifact@v4
