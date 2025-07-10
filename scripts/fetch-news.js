@@ -5,7 +5,7 @@ const cheerio = require('cheerio');
 
 const CONFIG = {
   TELEGRAM_CHANNEL: 'ordendog',
-  MAX_POSTS: 7, // Увеличиваем до 7 постов
+  MAX_POSTS: 30, // Увеличиваем до 7 постов
   NEWS_PATH: path.resolve(__dirname, '../news.json')
 };
 
@@ -46,7 +46,7 @@ async function main() {
       lastUpdated: new Date().toISOString(),
       fetchMethod: 'direct',
       postsCount: posts.length,
-      posts: posts // Убрали reverse для сохранения исходного порядка
+      posts: posts.reverse() // Убрали reverse для сохранения исходного порядка
     };
     
     fs.writeFileSync(CONFIG.NEWS_PATH, JSON.stringify(result, null, 2));
