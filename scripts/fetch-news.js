@@ -4,8 +4,8 @@ const cheerio = require('cheerio');
 
 async function fetchNews() {
   try {
-    const CHANNEL_NAME = 'ordendog';
-    const response = await axios.get(`https://t.me/s/${CHANNEL_NAME}`, {
+    console.log('Fetching Telegram news...');
+    const response = await axios.get('https://t.me/s/ordendog', {
       timeout: 10000
     });
     
@@ -22,7 +22,7 @@ async function fetchNews() {
     };
 
     fs.writeFileSync('news.json', JSON.stringify(data, null, 2));
-    console.log('Successfully updated news.json');
+    console.log('News updated successfully!');
   } catch (error) {
     console.error('Error fetching news:', error.message);
     process.exit(1);
