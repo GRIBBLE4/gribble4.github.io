@@ -19,20 +19,34 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Node.js
+      - name: Setup Node.js (without cache)
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
+          cache: ''  # Отключаем кэширование
 
-      - name: Create package.json
-        run: echo '{"name":"temp","version":"1.0.0","dependencies":{"axios":"^1.8.0","cheerio":"^1.0.0-rc.12"}}' > package.json
+      - name: Create minimal package.json
+        run: |
+          echo '{
+            "name": "telegram-news-updater",
+            "version": "1.0.0",
+            "private": true,
+            "dependencies": {
+              "axios": "^1.8.0",
+              "cheerio": "^1.0.0-rc.12"
+            }
+          }' > package.json
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-package-lock  # Без создания lock-файла
 
       - name: Fetch Telegram news
         run: node scripts/fetch-news.js
+
+      - name: Cleanup dependencies
+        run: |
+          rm -rf node_modules
+          rm package.json
 
       - name: Commit and push changes
         run: |
@@ -40,13 +54,10 @@ jobs:
           git config --global user.email "actions-bot@users.noreply.github.com"
           git config --global pull.rebase true
           
-          # Синхронизация с веткой main
-          git pull origin main
-          
-          # Добавление изменений
+          git fetch origin
+          git reset --hard origin/main
           git add news.json
           
-          # Коммит и пуш
           if [ -n "$(git status --porcelain)" ]; then
             git commit -m "Auto-update news [skip ci]"
             git push origin HEAD:main
