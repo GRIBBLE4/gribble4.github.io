@@ -23,7 +23,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          cache: ''  # Явно отключаем кэширование
 
       - name: Create minimal package.json
         run: |
@@ -38,7 +38,10 @@ jobs:
           }' > package.json
 
       - name: Install dependencies
-        run: npm install --no-package-lock
+        run: |
+          # Явно отключаем создание lock-файла
+          npm config set package-lock false
+          npm install
 
       - name: Fetch Telegram news
         run: node scripts/fetch-news.js
