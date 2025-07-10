@@ -2,29 +2,30 @@ const fs = require('fs');
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-const CHANNEL_NAME = 'ordendog';  // Ваш Telegram-канал
-const MAX_POSTS = 5;             // Сколько новостей сохранять
-
 async function fetchNews() {
   try {
-    console.log('Fetching Telegram news...');
-    const response = await axios.get(`https://t.me/s/${CHANNEL_NAME}`);
-    const $ = cheerio.load(response.data);
+    const CHANNEL_NAME = 'ordendog';
+    const response = await axios.get(`https://t.me/s/${CHANNEL_NAME}`, {
+      timeout: 10000
+    });
     
+    const $ = cheerio.load(response.data);
     const posts = [];
-    $('.tgme_widget_message_wrap').slice(0, MAX_POSTS).each((i, el) => {
-      posts.push($(el).html());
+    
+    $('.tgme_widget_message_wrap').slice(0, 5).each((i, el) => {
+      posts.push($(el).html().trim());
     });
 
-    fs.writeFileSync('news.json', JSON.stringify({
+    const data = {
       lastUpdated: new Date().toISOString(),
-      posts: posts.reverse()  // Новые сверху
-    }, null, 2));
+      posts: posts.reverse()
+    };
 
-    console.log('News updated successfully!');
+    fs.writeFileSync('news.json', JSON.stringify(data, null, 2));
+    console.log('Successfully updated news.json');
   } catch (error) {
-    console.error('Error:', error.message);
-    process.exit(1);  // Завершить с ошибкой для GitHub Actions
+    console.error('Error fetching news:', error.message);
+    process.exit(1);
   }
 }
 
