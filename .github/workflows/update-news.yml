@@ -2,8 +2,8 @@ name: Update Telegram News
 
 on:
   schedule:
-    - cron: '0 */4 * * *'  # Каждые 4 часа
-  workflow_dispatch:
+    - cron: '0 */4 * * *'  # Запуск каждые 4 часа
+  workflow_dispatch:        # Разрешить ручной запуск
 
 jobs:
   update-news:
@@ -13,7 +13,7 @@ jobs:
       contents: write
     
     steps:
-      - name: Checkout with full history
+      - name: Checkout repository
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
@@ -23,13 +23,13 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'  # Кэшируем зависимости для ускорения
+          cache: 'npm'
 
       - name: Install dependencies
         run: |
           npm install axios cheerio
-          # Игнорируем созданные файлы
-          echo "node_modules" >> .gitignore
+          # Добавляем временный .gitignore
+          echo "node_modules/" >> .gitignore
           echo "package*.json" >> .gitignore
 
       - name: Fetch Telegram news
@@ -37,22 +37,19 @@ jobs:
 
       - name: Commit and push changes
         run: |
-          # Настройка git
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions-bot@users.noreply.github.com"
-          
-          # Принудительное обновление ветки
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
           git fetch origin
           git reset --hard origin/main
           
-          # Добавляем ТОЛЬКО нужные изменения
-          git add news.json .gitignore
+          # Добавляем только нужные файлы
+          git add news.json
           
-          # Проверка изменений
-          if [[ -n $(git status --porcelain --untracked-files=no) ]]; then
+          # Проверяем изменения
+          if [[ -n $(git status --porcelain) ]]; then
             git commit -m "Auto-update news [skip ci]"
-            git push origin HEAD:main --force
+            git push origin HEAD:main
           else
             echo "No changes to commit"
           fi
