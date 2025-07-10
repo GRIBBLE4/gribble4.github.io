@@ -28,24 +28,38 @@ jobs:
       - name: Fetch and save news
         run: node scripts/fetch-news.js
 
+      - name: Verify news.json
+        run: |
+          if [ ! -f "news.json" ]; then
+            echo "❌ news.json not found!"
+            exit 1
+          fi
+          echo "✅ news.json exists"
+          echo "Size: $(wc -c < news.json) bytes"
+          echo "Last updated: $(jq -r '.lastUpdated' news.json)"
+
       - name: Commit changes
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@users.noreply.github.com"
-          
-          # Принудительно обновляем ветку перед коммитом
-          git fetch origin
-          git reset --hard origin/main
-          
           git add news.json
-          git diff-index --quiet HEAD || git commit -m "Auto-update: $(date -u '+%Y-%m-%d %H:%M UTC')"
+          git commit -m "Auto-update news [skip ci]" || echo "No changes to commit"
 
       - name: Push changes
         run: |
-          git pull origin main --ff-only 2>/dev/null || true
+          # Reset any changes not committed
+          git reset --hard HEAD
+          git clean -fd
+          
+          # Pull and push with rebase
+          git pull origin main --rebase
           git push origin main
 
-      - name: Verify result
-        run: |
-          echo "Последний коммит:"
-          git log -1 --oneline
+      - name: Upload debug files
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: debug-files
+          path: |
+            news.json
+            error.log
