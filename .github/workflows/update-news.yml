@@ -11,14 +11,13 @@ jobs:
     
     permissions:
       contents: write
-      pull-requests: write
-
+    
     steps:
-      - name: Checkout repository
+      - name: Checkout with full history
         uses: actions/checkout@v3
         with:
-          ref: main
-          fetch-depth: 0
+          fetch-depth: 0  # Полная история коммитов
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -28,17 +27,28 @@ jobs:
       - name: Install dependencies
         run: npm install axios cheerio
 
-      - name: Fetch news
+      - name: Fetch Telegram news
         run: node scripts/fetch-news.js
 
-      - name: Create Pull Request
-        id: pr
-        uses: peter-evans/create-pull-request@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "Auto-update news [skip ci]"
-          title: "Automatic news update"
-          body: "Automated news update from Telegram"
-          branch: "auto-news-update"
-          delete-branch: true
-          base: main
+      - name: Commit and push changes
+        run: |
+          # Настройка git
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions-bot@users.noreply.github.com"
+          
+          # Принудительное обновление ветки
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git fetch origin
+          git reset --hard origin/main
+          
+          # Добавление изменений
+          git add news.json
+          
+          # Проверка изменений и коммит
+          if [[ -n $(git status --porcelain) ]]; then
+            git commit -m "Auto-update news [skip ci]"
+            # Принудительный push (только для news.json)
+            git push origin HEAD:main --force
+          else
+            echo "No changes to commit"
+          fi
