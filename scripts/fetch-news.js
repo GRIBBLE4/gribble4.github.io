@@ -11,6 +11,7 @@ async function fetchNews() {
       },
       timeout: 15000
     });
+    fs.writeFileSync('debug.html', response.data);
     
     const $ = cheerio.load(response.data);
     const posts = [];
@@ -31,10 +32,10 @@ async function fetchNews() {
     console.log(`Found ${posts.length} posts`);
     
   } catch (error) {
-    console.error('Error fetching news:', error.message);
-    // Сохраняем ошибку для отладки
-    fs.writeFileSync('news-error.log', error.message);
+    console.error('Full error:', error);
+    fs.writeFileSync('error.txt', JSON.stringify(error, null, 2));
     process.exit(1);
+    
   }
 }
 
