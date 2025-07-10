@@ -2,49 +2,58 @@ name: Update Telegram News
 
 on:
   schedule:
-    - cron: '0 */4 * * *'  # Запуск каждые 4 часа
+    - cron: '0 */4 * * *'  # Каждые 4 часа
   workflow_dispatch:
 
 jobs:
   update-news:
     runs-on: ubuntu-latest
-    
     permissions:
-      contents: write
-      
+      contents: write  # Необходимо для push
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0  # Полная история коммитов
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: ''  # Явно отключаем кэширование
-
-      - name: Create minimal package.json
-        run: |
-          echo '{
-            "name": "telegram-news-updater",
-            "version": "1.0.0",
-            "private": true,
-            "dependencies": {
-              "axios": "^1.8.0",
-              "cheerio": "^1.0.0-rc.12"
-            }
-          }' > package.json
 
       - name: Install dependencies
         run: |
-          # Явно отключаем создание lock-файла
-          npm config set package-lock false
-          npm install
+          npm install axios cheerio
 
-      - name: Fetch Telegram news
-        run: node ./scripts/fetch-news.js
+      - name: Run news fetcher
+        run: node scripts/fetch-news.js
+
+      - name: Verify news.json
+        run: |
+          if [ ! -f "news.json" ]; then
+            echo "Error: news.json not created!"
+            exit 1
+          fi
+          echo "Last updated: $(jq -r '.lastUpdated' news.json)"
+          echo "Posts count: $(jq -r '.postsCount' news.json)"
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@users.noreply.github.com"
+          
+          git add news.json
+          
+          # Проверяем изменения
+          if git diff-index --quiet HEAD --; then
+            echo "No changes to commit"
+          else
+            git commit -m "Auto-update news [skip ci]"
+            git pull --rebase origin main  # Избегаем конфликтов
+            git push origin main
+            echo "Changes pushed successfully"
+          fi
 
       - name: Upload debug files
         uses: actions/upload-artifact@v4
@@ -52,28 +61,5 @@ jobs:
         with:
           name: debug-files
           path: |
-            debug.html
-            error.txt
             news.json
-
-      - name: Cleanup dependencies
-        run: |
-          rm -rf node_modules
-          rm package.json
-
-      - name: Commit and push changes
-        run: |
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions-bot@users.noreply.github.com"
-          git config --global pull.rebase true
-          
-          git fetch origin
-          git reset --hard origin/main
-          git add news.json
-          
-          if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Auto-update news [skip ci]"
-            git push origin HEAD:main
-          else
-            echo "No changes to commit"
-          fi
+            error.log
