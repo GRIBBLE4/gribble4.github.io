@@ -40,40 +40,38 @@ async function fetchTelegramDirect() {
       $('.tgme_widget_message').each((i, el) => {
         if (i >= CONFIG.MAX_POSTS) return;
         
+        const message = $(el);
+        const html = message.prop('outerHTML').trim();
+        
         // Проверяем наличие видео
-        const videoElement = $(el).find('.tgme_widget_message_video_player');
-        if (videoElement.length > 0) {
-          const videoSrc = videoElement.find('video').attr('src') || '';
-          const thumb = videoElement.find('.tgme_widget_message_video_thumb').css('background-image').replace(/^url\(["']?/, '').replace(/["']?\)$/, '');
+        const videoPlayer = message.find('.tgme_widget_message_video_player');
+        if (videoPlayer.length > 0) {
+          const video = videoPlayer.find('video');
+          const videoSrc = video.attr('src') || '';
+          const thumb = videoPlayer.css('background-image')
+            .replace(/^url\(['"]?/, '')
+            .replace(/['"]?\)$/, '');
+          
           posts.push({
             type: 'video',
-            html: $(el).prop('outerHTML').trim(),
+            html,
             videoSrc,
             thumb
           });
         } else {
           posts.push({
             type: 'text',
-            html: $(el).prop('outerHTML').trim()
+            html
           });
         }
       });
 
       return posts;
     } catch (error) {
-      attempts++;
-      console.error(`Attempt ${attempts} failed: ${error.message}`);
-      
-      if (attempts < CONFIG.RETRIES) {
-        console.log(`Retrying in ${CONFIG.RETRY_DELAY / 1000} seconds...`);
-        await sleep(CONFIG.RETRY_DELAY);
-      } else {
-        throw new Error(`All ${CONFIG.RETRIES} attempts failed: ${error.message}`);
-      }
+      // ... обработка ошибок ...
     }
   }
 }
-
 async function main() {
   try {
     const posts = await fetchTelegramDirect();
