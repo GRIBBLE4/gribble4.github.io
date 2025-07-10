@@ -3,7 +3,7 @@ name: Update Telegram News
 on:
   schedule:
     - cron: '0 */4 * * *'  # Запуск каждые 4 часа
-  workflow_dispatch:        # Разрешить ручной запуск
+  workflow_dispatch:
 
 jobs:
   update-news:
@@ -11,7 +11,7 @@ jobs:
     
     permissions:
       contents: write
-    
+      
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -26,11 +26,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: |
-          npm install axios cheerio
-          # Добавляем временный .gitignore
-          echo "node_modules/" >> .gitignore
-          echo "package*.json" >> .gitignore
+        run: npm install axios cheerio
 
       - name: Fetch Telegram news
         run: node scripts/fetch-news.js
@@ -39,17 +35,21 @@ jobs:
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions-bot@users.noreply.github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-          git fetch origin
-          git reset --hard origin/main
           
-          # Добавляем только нужные файлы
+          # Обязательные настройки для корректной работы
+          git config --global pull.rebase true
+          git config --global advice.detachedHead false
+          
+          # Синхронизация с веткой main
+          git pull origin main
+          
+          # Добавление изменений
           git add news.json
           
-          # Проверяем изменения
-          if [[ -n $(git status --porcelain) ]]; then
+          # Коммит и пуш
+          if git diff-index --quiet HEAD --; then
+            echo "No changes to commit"
+          else
             git commit -m "Auto-update news [skip ci]"
             git push origin HEAD:main
-          else
-            echo "No changes to commit"
           fi
