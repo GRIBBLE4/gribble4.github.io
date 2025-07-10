@@ -2,50 +2,50 @@ name: Update Telegram News
 
 on:
   schedule:
-    - cron: '0 */4 * * *'  # Каждые 4 часа (в 00:00, 04:00, 08:00 и т.д.)
-  workflow_dispatch:       # Ручной запуск
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
 
 jobs:
   update-news:
     runs-on: ubuntu-latest
     permissions:
-      contents: write     # Права на запись в репозиторий
+      contents: write
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Полная история коммитов
+          fetch-depth: 0
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install deps
+      - name: Install dependencies
         run: npm install axios cheerio
 
-      - name: Fetch fresh data
-        run: |
-          node scripts/fetch-news.js
-          echo "Последнее обновление: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+      - name: Fetch and save news
+        run: node scripts/fetch-news.js
 
       - name: Commit changes
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@users.noreply.github.com"
+          
+          # Принудительно обновляем ветку перед коммитом
+          git fetch origin
+          git reset --hard origin/main
+          
           git add news.json
           git diff-index --quiet HEAD || git commit -m "Auto-update: $(date -u '+%Y-%m-%d %H:%M UTC')"
-          
+
       - name: Push changes
         run: |
-          git pull --rebase origin main
+          git pull origin main --ff-only 2>/dev/null || true
           git push origin main
 
-      - name: Debug info
-        if: always()
+      - name: Verify result
         run: |
-          echo "=== Статус репозитория ==="
-          git status
-          echo "=== Содержимое news.json ==="
-          jq '.' news.json || cat news.json
+          echo "Последний коммит:"
+          git log -1 --oneline
