@@ -43,7 +43,8 @@ jobs:
       - name: Fetch Telegram news
         run: node scripts/fetch-news.js
 
-        - name: Upload debug files
+      # Исправление: убрать лишний отступ
+      - name: Upload debug files
         uses: actions/upload-artifact@v3
         if: always()  # Всегда загружать, даже при ошибке
         with:
