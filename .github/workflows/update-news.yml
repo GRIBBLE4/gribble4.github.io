@@ -8,23 +8,24 @@ on:
 jobs:
   update-news:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
-      contents: write  # Необходимо для push
-      pull-requests: write  # Для создания PR (если используется вариант с PR)
+      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Полная история коммитов
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: npm install axios cheerio
+        run: npm install axios
 
       - name: Fetch and save news
         run: node scripts/fetch-news.js
@@ -39,42 +40,49 @@ jobs:
           echo "Size: $(wc -c < news.json) bytes"
           echo "Last updated: $(jq -r '.lastUpdated' news.json)"
 
+      - name: Verify posts count
+        run: |
+          COUNT=$(jq '.posts | length' news.json)
+          if [ $COUNT -ne 7 ]; then
+            echo "❌ Expected 7 posts, got $COUNT"
+            exit 1
+          fi
+          echo "✅ Posts count: $COUNT"
+
+      - name: Verify posts recency
+        run: |
+          CURRENT_TS=$(date +%s)
+          LAST_POST_TS=$(date -d "$(jq -r '.lastUpdated' news.json)" +%s)
+          DIFF_DAYS=$(( (CURRENT_TS - LAST_POST_TS) / 86400 ))
+          
+          if [ $DIFF_DAYS -gt 2 ]; then
+            echo "❌ Posts are outdated! Last update was $DIFF_DAYS days ago"
+            exit 1
+          fi
+          echo "✅ Posts are recent ($DIFF_DAYS days old)"
+
       - name: Commit changes
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@users.noreply.github.com"
           git add news.json
-          git commit -m "Auto-update news [skip ci]" || echo "No changes to commit"
-
-      - name: Push changes (safe method)
-        run: |
-          # Получаем последние изменения
-          git fetch origin main
-          
-          # Создаем временную ветку на основе актуального main
-          git checkout -b news-update origin/main
-          
-          # Копируем наш обновленный файл
-          cp ../news.json ./
-          
-          # Коммитим изменения
-          git add news.json
-          git commit -m "Auto-update news [skip ci]"
-          
-          # Пушим изменения
-          git push origin news-update:main --force-with-lease
-          
-          # Альтернативный вариант (если предыдущий не сработает)
-          if [ $? -ne 0 ]; then
-            echo "Retrying with full force push..."
-            git push origin news-update:main --force
+          if git diff-index --quiet HEAD --; then
+            echo "No changes to commit"
+          else
+            git commit -m "Auto-update news [skip ci]"
           fi
+
+      - name: Push changes
+        run: |
+          git pull --rebase origin main
+          git push origin main
 
       - name: Upload debug files
         uses: actions/upload-artifact@v4
-        if: always()
+        if: failure()
         with:
           name: debug-files
           path: |
             news.json
             error.log
+          retention-days: 3
