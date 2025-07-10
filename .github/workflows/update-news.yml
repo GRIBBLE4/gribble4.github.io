@@ -2,12 +2,13 @@ name: Update Telegram News
 
 on:
   schedule:
-    - cron: '0 */4 * * *'
+    - cron: '0 */6 * * *' # Каждые 6 часов вместо 4
   workflow_dispatch:
 
 jobs:
   update-news:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
 
@@ -21,12 +22,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm install axios cheerio
 
       - name: Fetch and save news
         run: node scripts/fetch-news.js
+        timeout-minutes: 5
 
       - name: Verify news.json
         run: |
@@ -47,11 +50,6 @@ jobs:
 
       - name: Push changes
         run: |
-          # Reset any changes not committed
-          git reset --hard HEAD
-          git clean -fd
-          
-          # Pull and push with rebase
           git pull origin main --rebase
           git push origin main
 
