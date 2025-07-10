@@ -16,16 +16,21 @@ jobs:
       - name: Checkout with full history
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Полная история коммитов
+          fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+          cache: 'npm'  # Кэшируем зависимости для ускорения
 
       - name: Install dependencies
-        run: npm install axios cheerio
+        run: |
+          npm install axios cheerio
+          # Игнорируем созданные файлы
+          echo "node_modules" >> .gitignore
+          echo "package*.json" >> .gitignore
 
       - name: Fetch Telegram news
         run: node scripts/fetch-news.js
@@ -41,13 +46,12 @@ jobs:
           git fetch origin
           git reset --hard origin/main
           
-          # Добавление изменений
-          git add news.json
+          # Добавляем ТОЛЬКО нужные изменения
+          git add news.json .gitignore
           
-          # Проверка изменений и коммит
-          if [[ -n $(git status --porcelain) ]]; then
+          # Проверка изменений
+          if [[ -n $(git status --porcelain --untracked-files=no) ]]; then
             git commit -m "Auto-update news [skip ci]"
-            # Принудительный push (только для news.json)
             git push origin HEAD:main --force
           else
             echo "No changes to commit"
