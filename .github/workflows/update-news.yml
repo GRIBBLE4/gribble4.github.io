@@ -2,64 +2,50 @@ name: Update Telegram News
 
 on:
   schedule:
-    - cron: '0 */4 * * *'
-  workflow_dispatch:
+    - cron: '0 */4 * * *'  # Каждые 4 часа (в 00:00, 04:00, 08:00 и т.д.)
+  workflow_dispatch:       # Ручной запуск
 
 jobs:
   update-news:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write     # Права на запись в репозиторий
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # Полная история коммитов
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install dependencies
+      - name: Install deps
         run: npm install axios cheerio
 
-      - name: Fetch and save news
-        run: node scripts/fetch-news.js
-
-      - name: Verify news.json
+      - name: Fetch fresh data
         run: |
-          if [ ! -f "news.json" ]; then
-            echo "❌ news.json not found!"
-            exit 1
-          fi
-          echo "✅ news.json exists"
-          echo "Size: $(wc -c < news.json) bytes"
-          echo "Last updated: $(jq -r '.lastUpdated' news.json)"
+          node scripts/fetch-news.js
+          echo "Последнее обновление: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 
       - name: Commit changes
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@users.noreply.github.com"
           git add news.json
-          git commit -m "Auto-update news [skip ci]" || echo "No changes to commit"
-
+          git diff-index --quiet HEAD || git commit -m "Auto-update: $(date -u '+%Y-%m-%d %H:%M UTC')"
+          
       - name: Push changes
         run: |
-          # Reset any changes not committed
-          git reset --hard HEAD
-          git clean -fd
-          
-          # Pull and push with rebase
-          git pull origin main --rebase
+          git pull --rebase origin main
           git push origin main
 
-      - name: Upload debug files
-        uses: actions/upload-artifact@v4
+      - name: Debug info
         if: always()
-        with:
-          name: debug-files
-          path: |
-            news.json
-            error.log
+        run: |
+          echo "=== Статус репозитория ==="
+          git status
+          echo "=== Содержимое news.json ==="
+          jq '.' news.json || cat news.json
