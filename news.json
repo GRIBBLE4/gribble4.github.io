@@ -1,1 +1,4 @@
-
+echo '{"lastUpdated":"","posts":[]}' > news.json
+git add news.json
+git commit -m "Initialize news.json"
+git push
