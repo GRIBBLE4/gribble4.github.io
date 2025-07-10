@@ -1,94 +1,59 @@
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
-const cheerio = require('cheerio');
 
 const CONFIG = {
   TELEGRAM_CHANNEL: 'ordendog',
   MAX_POSTS: 7,
-  NEWS_PATH: path.resolve(__dirname, '../news.json'),
-  RSS2JSON_API_KEY: '5zbmvrnmrsac40ivodbyasxlwtqenx9f7bflsrzd'
+  NEWS_PATH: path.resolve(__dirname, '../news.json')
 };
 
-async function fetchTelegramDirect() {
+async function fetchTelegramRSS() {
+  const params = {
+    rss_url: `https://t.me/s/${CONFIG.TELEGRAM_CHANNEL}?format=rss`,
+    api_key: '5zbmvrnmrsac40ivodbyasxlwtqenx9f7bflsrzd',
+    count: CONFIG.MAX_POSTS,
+    order_dir: 'desc'
+  };
+
   try {
-    const response = await axios.get(`https://t.me/s/${CONFIG.TELEGRAM_CHANNEL}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-        'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'
-      },
-      timeout: 30000
+    const response = await axios.get('https://api.rss2json.com/v1/api.json', { params });
+    if (response.data.status !== 'ok') {
+      throw new Error(`API Error: ${response.data.message}`);
+    }
+
+    return response.data.items.map(item => {
+      let content = item.description;
+      if (item.enclosure && item.enclosure.type.startsWith('video/')) {
+        content = `
+          <video controls width="100%" poster="${item.thumbnail || ''}">
+            <source src="${item.enclosure.link}" type="${item.enclosure.type}">
+          </video>
+          ${content}
+        `;
+      }
+      return content;
     });
-
-    const $ = cheerio.load(response.data);
-    const posts = [];
-
-    $('.tgme_widget_message').each((i, el) => {
-      if (i >= CONFIG.MAX_POSTS) return;
-      
-      const $post = $(el);
-      let postHtml = $post.prop('outerHTML').trim();
-      
-      // Extract and append videos
-      $post.find('.tgme_widget_message_video').each((_, video) => {
-        postHtml += $(video).prop('outerHTML').trim();
-      });
-      
-      posts.push(postHtml);
-    });
-
-    return posts;
   } catch (error) {
-    console.error('Direct fetch error:', error);
-    return null;
-  }
-}
-
-async function fetchTelegramViaRSS() {
-  try {
-    const rssUrl = `https://t.me/s/${CONFIG.TELEGRAM_CHANNEL}?embed=1&mode=rss`;
-    const response = await axios.get(
-      `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&api_key=${CONFIG.RSS2JSON_API_KEY}&count=${CONFIG.MAX_POSTS}`
-    );
-    
-    return response.data.items.map(item => ({
-      ...item,
-      content: item.description // Use description as it contains full HTML
-    }));
-  } catch (error) {
-    console.error('RSS fetch error:', error);
-    return null;
+    console.error('RSS fetch failed:', error);
+    throw error;
   }
 }
 
 async function main() {
   try {
-    // Try both methods
-    const [directPosts, rssPosts] = await Promise.all([
-      fetchTelegramDirect(),
-      fetchTelegramViaRSS()
-    ]);
-
-    // Use whichever method worked
-    let posts = directPosts || rssPosts || [];
-    let fetchMethod = directPosts ? 'direct' : 'rss';
-    
+    const posts = await fetchTelegramRSS();
     const result = {
       lastUpdated: new Date().toISOString(),
-      fetchMethod,
+      fetchMethod: 'rss',
       postsCount: posts.length,
-      posts: posts.slice(0, CONFIG.MAX_POSTS).reverse() // Ensure we don't exceed MAX_POSTS
+      posts
     };
     
     fs.writeFileSync(CONFIG.NEWS_PATH, JSON.stringify(result, null, 2));
-    console.log(`Saved ${result.posts.length} posts to ${CONFIG.NEWS_PATH}`);
+    console.log(`Saved ${posts.length} posts with video support`);
   } catch (error) {
-    console.error('Main error:', error);
-    fs.writeFileSync('error.log', JSON.stringify({
-      error: error.message,
-      stack: error.stack,
-      timestamp: new Date().toISOString()
-    }, null, 2));
+    console.error('Final error:', error);
     process.exit(1);
   }
 }
