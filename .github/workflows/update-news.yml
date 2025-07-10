@@ -47,13 +47,23 @@ jobs:
 
       - name: Push changes
         run: |
-          # Reset any changes not committed
+          # Reset to clean state
           git reset --hard HEAD
           git clean -fd
           
-          # Pull and push with rebase
-          git pull origin main --rebase
-          git push origin main
+          # Fetch latest changes
+          git fetch origin
+          
+          # Reset to origin/main and overwrite news.json
+          git reset --hard origin/main
+          git checkout HEAD -- news.json
+          
+          # Add and commit again
+          git add news.json
+          git commit -m "Auto-update news [skip ci]" || echo "No changes to commit"
+          
+          # Push with force if needed
+          git push origin main || git push origin main --force
 
       - name: Upload debug files
         uses: actions/upload-artifact@v4
