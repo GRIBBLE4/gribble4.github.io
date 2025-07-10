@@ -10,32 +10,39 @@ jobs:
     runs-on: ubuntu-latest
     
     permissions:
-      contents: write
+      contents: write  # Даём права на запись
     
     steps:
-      - name: Checkout code
+      - name: Checkout with full history
         uses: actions/checkout@v3
         with:
           fetch-depth: 0  # Полная история коммитов
-          
+          token: ${{ secrets.GITHUB_TOKEN }}  # Используем токен аутентификации
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          
+
       - name: Install dependencies
         run: npm install axios cheerio
-          
-      - name: Fetch news
+
+      - name: Fetch Telegram news
         run: node scripts/fetch-news.js
-          
-      - name: Commit and Push
+
+      - name: Commit and push changes
         run: |
-          # Принудительно синхронизируем с origin
+          # Настраиваем git
           git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions-bot@github.com"
+          git config --global user.email "actions-bot@users.noreply.github.com"
+          
+          # Принудительно обновляем ветку
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-          git pull --rebase origin main
+          git fetch origin
+          git reset --hard origin/main
+          
+          # Коммитим и пушим изменения
           git add news.json
-          git commit -m "Auto: Update news cache [skip ci]" || echo "No changes to commit"
+          git commit -m "Auto: Update news cache [skip ci]" || exit 0
+          git pull --rebase origin main
           git push origin main
