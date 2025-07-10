@@ -5,11 +5,11 @@ const cheerio = require('cheerio');
 
 const CONFIG = {
   TELEGRAM_CHANNEL: 'ordendog',
-  MAX_POSTS: 10, // Уменьшаем до 10 постов
+  MAX_POSTS: 16,
   NEWS_PATH: path.resolve(__dirname, '../news.json'),
-  RETRIES: 2, // Уменьшаем количество попыток
-  RETRY_DELAY: 1000, // Уменьшаем задержку
-  TIMEOUT: 10000 // Уменьшаем таймаут запроса
+  RETRIES: 2,
+  RETRY_DELAY: 1000,
+  TIMEOUT: 10000
 };
 
 function sleep(ms) {
@@ -24,8 +24,7 @@ async function fetchTelegramDirect() {
       const response = await axios.get(`https://t.me/s/${CONFIG.TELEGRAM_CHANNEL}`, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-          'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+          'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'
         },
         timeout: CONFIG.TIMEOUT
       });
@@ -39,24 +38,17 @@ async function fetchTelegramDirect() {
       let count = 0;
 
       $('.tgme_widget_message').each((i, el) => {
-        if (count >= CONFIG.MAX_POSTS) return false; // Прерываем цикл при достижении лимита
+        if (count >= CONFIG.MAX_POSTS) return false;
         
         try {
-          const message = $(el);
-          const html = message.prop('outerHTML').trim();
-          
-          // Простая проверка валидности поста
-          const hasContent = html.includes('tgme_widget_message_text') || 
-                            html.includes('tgme_widget_message_photo') ||
-                            html.includes('tgme_widget_message_video');
-          
-          if (hasContent) {
+          const html = $(el).prop('outerHTML').trim();
+          // Простая проверка, что пост не пустой
+          if (html.length > 100) {
             posts.push(html);
             count++;
           }
         } catch (error) {
-          console.error(`Error processing post ${i}:`, error.message);
-          // Пропускаем проблемный пост, но продолжаем обработку
+          console.error(`Error processing post ${i}: ${error.message}`);
         }
       });
 
@@ -66,51 +58,57 @@ async function fetchTelegramDirect() {
       console.error(`Attempt ${attempts} failed: ${error.message}`);
       
       if (attempts < CONFIG.RETRIES) {
-        console.log(`Retrying in ${CONFIG.RETRY_DELAY / 1000} seconds...`);
         await sleep(CONFIG.RETRY_DELAY);
       } else {
-        // Возвращаем пустой массив вместо ошибки
-        console.error(`All attempts failed, returning empty posts`);
+        console.log('Returning empty posts after all attempts failed');
         return [];
       }
     }
   }
+  return [];
 }
 
 async function main() {
   try {
-    const posts = await fetchTelegramDirect();
+    console.log('Starting news fetch...');
+    const newPosts = await fetchTelegramDirect();
+    console.log(`Fetched ${newPosts.length} new posts`);
     
-    // Если не удалось получить посты, пробуем прочитать старые
     let existingPosts = [];
-    if (posts.length === 0 && fs.existsSync(CONFIG.NEWS_PATH)) {
+    if (fs.existsSync(CONFIG.NEWS_PATH)) {
       try {
         const existingData = JSON.parse(fs.readFileSync(CONFIG.NEWS_PATH, 'utf8'));
         existingPosts = existingData.posts || [];
-        console.log(`Using existing ${existingPosts.length} posts from cache`);
+        console.log(`Found ${existingPosts.length} existing posts`);
       } catch (e) {
         console.error('Error reading existing news:', e.message);
       }
     }
 
+    // Используем новые посты, если они есть, иначе оставляем старые
+    const finalPosts = newPosts.length > 0 ? newPosts.reverse() : existingPosts;
+    
     const result = {
       lastUpdated: new Date().toISOString(),
       fetchMethod: 'direct',
-      postsCount: posts.length || existingPosts.length,
-      posts: posts.length ? posts.reverse() : existingPosts
+      postsCount: finalPosts.length,
+      posts: finalPosts
     };
     
     fs.writeFileSync(CONFIG.NEWS_PATH, JSON.stringify(result, null, 2));
-    console.log(`Saved ${result.posts.length} posts to ${CONFIG.NEWS_PATH}`);
+    console.log(`Saved ${finalPosts.length} posts to ${CONFIG.NEWS_PATH}`);
+    
+    return 0;
   } catch (error) {
-    console.error('Final fetch error:', error);
-    // Пишем в лог, но не прерываем процесс
-    fs.writeFileSync('error.log', JSON.stringify({
-      error: error.message,
-      stack: error.stack,
-      timestamp: new Date().toISOString()
-    }, null, 2));
+    console.error('Final error:', error.message);
+    return 1;
   }
 }
 
-main();
+// Запускаем и завершаем процесс с правильным кодом
+main().then(code => {
+  process.exit(code);
+}).catch(err => {
+  console.error('Unhandled error:', err);
+  process.exit(1);
+});
