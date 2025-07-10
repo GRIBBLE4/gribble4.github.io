@@ -44,7 +44,7 @@ jobs:
           npm install
 
       - name: Fetch Telegram news
-        run: node scripts/fetch-news.js
+        run: node ./scripts/fetch-news.js
 
       - name: Upload debug files
         uses: actions/upload-artifact@v4
