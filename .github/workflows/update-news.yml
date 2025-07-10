@@ -9,13 +9,14 @@ jobs:
   update-news:
     runs-on: ubuntu-latest
     
-    permissions:  # Добавьте этот блок!
-      contents: write  # Даем права на запись
+    permissions:
+      contents: write
     
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}  # Используем автоматический токен
+          fetch-depth: 0  # Полная история коммитов
           
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -25,13 +26,16 @@ jobs:
       - name: Install dependencies
         run: npm install axios cheerio
           
-      - name: Fetch and save news
+      - name: Fetch news
         run: node scripts/fetch-news.js
           
-      - name: Commit and push changes
+      - name: Commit and Push
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
+          # Принудительно синхронизируем с origin
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions-bot@github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git pull --rebase origin main
           git add news.json
-          git commit -m "Auto-update news [skip ci]" || echo "No changes to commit"
-          git push
+          git commit -m "Auto: Update news cache [skip ci]" || echo "No changes to commit"
+          git push origin main
