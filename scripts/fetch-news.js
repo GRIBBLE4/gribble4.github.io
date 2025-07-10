@@ -3,6 +3,7 @@ const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
 
+// Конфигурация
 const CONFIG = {
   TELEGRAM_CHANNEL: 'ordendog',
   MAX_POSTS: 7,
@@ -32,30 +33,31 @@ async function fetchWithRetry(url, retries = CONFIG.RETRY_COUNT) {
   }
 }
 
-async function fetchTelegramDirect() {
+// Получение постов напрямую из HTML Telegram
+async function fetchTelegramPosts() {
   try {
     const url = `https://t.me/s/${CONFIG.TELEGRAM_CHANNEL}`;
     const response = await fetchWithRetry(url);
     const $ = cheerio.load(response.data);
     const posts = [];
 
+    // Извлекаем сообщения
     $('.tgme_widget_message').each((i, el) => {
       if (i >= CONFIG.MAX_POSTS) return;
       
       const $post = $(el);
       let postHtml = $post.prop('outerHTML').trim();
       
-      // Добавляем поддержку видео
+      // Обработка видео
       const $video = $post.find('video');
       if ($video.length > 0) {
         const videoSrc = $video.attr('src');
-        const videoType = $video.attr('type') || 'video/mp4';
         const poster = $video.attr('poster') || '';
         
         const videoHTML = `
           <div class="telegram-video">
             <video controls playsinline width="100%" ${poster ? `poster="${poster}"` : ''}>
-              <source src="${videoSrc}" type="${videoType}">
+              <source src="${videoSrc}" type="video/mp4">
               Ваш браузер не поддерживает видео тег.
             </video>
           </div>
@@ -69,50 +71,50 @@ async function fetchTelegramDirect() {
 
     return posts;
   } catch (error) {
-    console.error('Ошибка при загрузке постов из Telegram:', error.message);
+    console.error('Ошибка при загрузке постов:', error.message);
     
-    // Если есть кэшированная версия, используем ее
+    // Используем кэшированные данные при наличии
     if (fs.existsSync(CONFIG.NEWS_PATH)) {
       try {
         const cached = JSON.parse(fs.readFileSync(CONFIG.NEWS_PATH, 'utf8'));
-        console.log('Используем кэшированные посты из-за ошибки загрузки');
+        console.log('Используем кэшированные посты');
         return cached.posts.slice(0, CONFIG.MAX_POSTS);
       } catch (e) {
-        console.error('Ошибка при чтении кэшированных постов:', e.message);
+        console.error('Ошибка чтения кэша:', e.message);
       }
     }
     
-    throw error;
+    // Если кэша нет, возвращаем пустой массив
+    return [];
   }
 }
 
+// Основная функция
 async function main() {
   try {
-    const posts = await fetchTelegramDirect();
+    const posts = await fetchTelegramPosts();
+    
+    // Формируем результат
     const result = {
       lastUpdated: new Date().toISOString(),
       fetchMethod: 'direct',
       postsCount: posts.length,
-      posts: posts.reverse() // Переворачиваем, чтобы последний пост был первым
+      posts: posts.reverse()
     };
     
+    // Сохраняем результат
     fs.writeFileSync(CONFIG.NEWS_PATH, JSON.stringify(result, null, 2));
     console.log(`✅ Успешно сохранено ${posts.length} постов`);
   } catch (error) {
     console.error('❌ Критическая ошибка:', error.message);
     
+    // Логируем ошибку
     const errorData = {
       timestamp: new Date().toISOString(),
       error: {
         message: error.message,
         stack: error.stack,
-        code: error.code,
-        response: error.response ? {
-          status: error.response.status,
-          data: typeof error.response.data === 'string' 
-            ? error.response.data.substring(0, 200) + '...' 
-            : error.response.data
-        } : undefined
+        code: error.code
       }
     };
     
@@ -121,4 +123,5 @@ async function main() {
   }
 }
 
+// Запускаем скрипт
 main();
