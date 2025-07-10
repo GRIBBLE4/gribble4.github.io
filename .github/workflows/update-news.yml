@@ -1,0 +1,27 @@
+name: Update Telegram News
+
+on:
+  schedule:
+    - cron: '0 */4 * * *' # Каждые 6 часов
+  workflow_dispatch:
+
+jobs:
+  update-news:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Fetch Telegram News
+        run: |
+          # Используйте любой скрипт для парсинга Telegram (Python, Node.js и т.д.)
+          # Пример для Node.js:
+          npm install axios cheerio
+          node scripts/fetch-news.js
+          
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add news.json
+          git commit -m "Update news cache"
+          git push
