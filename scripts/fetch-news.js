@@ -1,96 +1,70 @@
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const cheerio = require('cheerio');
 
 const CONFIG = {
   TELEGRAM_CHANNEL: 'ordendog',
   MAX_POSTS: 7,
-  NEWS_PATH: path.resolve(__dirname, '../news.json'),
-  RSS_API_KEY: '5zbmvrnmrsac40ivodbyasxlwtqenx9f7bflsrzd'
+  NEWS_PATH: path.resolve(__dirname, '../news.json')
 };
 
-async function fetchTelegramRSS() {
-  const params = {
-    rss_url: `https://t.me/s/${CONFIG.TELEGRAM_CHANNEL}?format=rss`,
-    api_key: CONFIG.RSS_API_KEY,
-    count: CONFIG.MAX_POSTS,
-    order_dir: 'desc'
-  };
+async function fetchTelegramDirect() {
+  const response = await axios.get(`https://t.me/s/${CONFIG.TELEGRAM_CHANNEL}`, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+      'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7'
+    },
+    timeout: 30000
+  });
 
-  try {
-    const response = await axios.get('https://api.rss2json.com/v1/api.json', { 
-      params,
-      timeout: 15000
-    });
+  const $ = cheerio.load(response.data);
+  const posts = [];
+
+  $('.tgme_widget_message').each((i, el) => {
+    if (i >= CONFIG.MAX_POSTS) return;
     
-    if (response.data.status !== 'ok') {
-      throw new Error(`RSS API Error: ${response.data.message || 'Unknown error'}`);
+    const $post = $(el);
+    let postHtml = $post.prop('outerHTML').trim();
+    
+    // Добавляем поддержку видео
+    const $video = $post.find('video');
+    if ($video.length > 0) {
+      const videoSrc = $video.attr('src');
+      const videoType = $video.attr('type') || 'video/mp4';
+      const poster = $video.attr('poster') || '';
+      
+      const videoHTML = `
+        <div class="telegram-video">
+          <video controls playsinline width="100%" ${poster ? `poster="${poster}"` : ''}>
+            <source src="${videoSrc}" type="${videoType}">
+            Ваш браузер не поддерживает видео тег.
+          </video>
+        </div>
+      `;
+      
+      // Добавляем видео в начало поста
+      postHtml = videoHTML + postHtml;
     }
+    
+    posts.push(postHtml);
+  });
 
-    // Обработка постов с видео
-    return response.data.items.map(item => {
-      let content = item.description;
-      
-      // Проверка видео-вложений
-      if (item.enclosure && item.enclosure.type.startsWith('video/')) {
-        const videoHTML = `
-          <div class="telegram-video">
-            <video controls playsinline width="100%" ${item.thumbnail ? `poster="${item.thumbnail}"` : ''}>
-              <source src="${item.enclosure.link}" type="${item.enclosure.type}">
-              Ваш браузер не поддерживает видео тег.
-            </video>
-          </div>
-        `;
-        content = videoHTML + content;
-      }
-      
-      // Проверка YouTube ссылок
-      const youtubeRegex = /(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/(watch\?v=)?([a-zA-Z0-9_-]{11})/g;
-      const youtubeMatch = content.match(youtubeRegex);
-      
-      if (youtubeMatch) {
-        youtubeMatch.forEach(link => {
-          const videoId = link.split(/\/|=/).pop();
-          const embedHTML = `
-            <div class="youtube-embed">
-              <iframe 
-                width="100%" 
-                height="315" 
-                src="https://www.youtube.com/embed/${videoId}" 
-                frameborder="0" 
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                allowfullscreen>
-              </iframe>
-            </div>
-          `;
-          content = content.replace(link, embedHTML);
-        });
-      }
-      
-      return content;
-    });
-  } catch (error) {
-    console.error('RSS fetch failed:', error);
-    throw error;
-  }
+  return posts;
 }
 
 async function main() {
   try {
-    const posts = await fetchTelegramRSS();
+    const posts = await fetchTelegramDirect();
     const result = {
       lastUpdated: new Date().toISOString(),
-      fetchMethod: 'rss',
+      fetchMethod: 'direct',
       postsCount: posts.length,
-      posts
+      posts: posts.reverse()
     };
     
     fs.writeFileSync(CONFIG.NEWS_PATH, JSON.stringify(result, null, 2));
-    console.log(`✅ Успешно сохранено ${posts.length} постов с поддержкой видео`);
-    
-    // Возвращаем количество постов для CI проверок
-    process.exitCode = 0;
-    return posts.length;
+    console.log(`✅ Успешно сохранено ${posts.length} постов`);
   } catch (error) {
     console.error('❌ Критическая ошибка:', error.message);
     
@@ -109,11 +83,8 @@ async function main() {
     };
     
     fs.writeFileSync('error.log', JSON.stringify(errorData, null, 2));
-    
-    // Выход с кодом ошибки для CI
     process.exit(1);
   }
 }
 
-// Запуск скрипта
 main();
