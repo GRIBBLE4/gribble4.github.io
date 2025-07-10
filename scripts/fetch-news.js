@@ -18,26 +18,53 @@ async function fetchTelegramRSS() {
   };
 
   try {
-    const response = await axios.get('https://api.rss2json.com/v1/api.json', { params });
+    const response = await axios.get('https://api.rss2json.com/v1/api.json', { 
+      params,
+      timeout: 15000
+    });
     
     if (response.data.status !== 'ok') {
-      throw new Error(`API Error: ${response.data.message}`);
+      throw new Error(`RSS API Error: ${response.data.message || 'Unknown error'}`);
     }
 
+    // Обработка постов с видео
     return response.data.items.map(item => {
       let content = item.description;
       
-      // Добавляем видео если есть вложения
+      // Проверка видео-вложений
       if (item.enclosure && item.enclosure.type.startsWith('video/')) {
-        content = `
-          <div class="video-container">
-            <video controls width="100%" poster="${item.thumbnail || ''}">
+        const videoHTML = `
+          <div class="telegram-video">
+            <video controls playsinline width="100%" ${item.thumbnail ? `poster="${item.thumbnail}"` : ''}>
               <source src="${item.enclosure.link}" type="${item.enclosure.type}">
-              Your browser does not support the video tag.
+              Ваш браузер не поддерживает видео тег.
             </video>
           </div>
-          ${content}
         `;
+        content = videoHTML + content;
+      }
+      
+      // Проверка YouTube ссылок
+      const youtubeRegex = /(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/(watch\?v=)?([a-zA-Z0-9_-]{11})/g;
+      const youtubeMatch = content.match(youtubeRegex);
+      
+      if (youtubeMatch) {
+        youtubeMatch.forEach(link => {
+          const videoId = link.split(/\/|=/).pop();
+          const embedHTML = `
+            <div class="youtube-embed">
+              <iframe 
+                width="100%" 
+                height="315" 
+                src="https://www.youtube.com/embed/${videoId}" 
+                frameborder="0" 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowfullscreen>
+              </iframe>
+            </div>
+          `;
+          content = content.replace(link, embedHTML);
+        });
       }
       
       return content;
@@ -59,16 +86,34 @@ async function main() {
     };
     
     fs.writeFileSync(CONFIG.NEWS_PATH, JSON.stringify(result, null, 2));
-    console.log(`✅ Saved ${posts.length} posts with video support`);
+    console.log(`✅ Успешно сохранено ${posts.length} постов с поддержкой видео`);
+    
+    // Возвращаем количество постов для CI проверок
+    process.exitCode = 0;
+    return posts.length;
   } catch (error) {
-    console.error('❌ Final error:', error);
-    fs.writeFileSync('error.log', JSON.stringify({
-      message: error.message,
-      stack: error.stack,
-      timestamp: new Date().toISOString()
-    }, null, 2));
+    console.error('❌ Критическая ошибка:', error.message);
+    
+    // Сохраняем подробную информацию об ошибке
+    const errorData = {
+      timestamp: new Date().toISOString(),
+      error: {
+        message: error.message,
+        stack: error.stack,
+        code: error.code,
+        response: error.response ? {
+          status: error.response.status,
+          data: error.response.data
+        } : undefined
+      }
+    };
+    
+    fs.writeFileSync('error.log', JSON.stringify(errorData, null, 2));
+    
+    // Выход с кодом ошибки для CI
     process.exit(1);
   }
 }
 
+// Запуск скрипта
 main();
