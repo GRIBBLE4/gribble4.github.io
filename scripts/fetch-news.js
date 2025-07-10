@@ -5,7 +5,7 @@ const cheerio = require('cheerio');
 
 const CONFIG = {
   TELEGRAM_CHANNEL: 'ordendog',
-  MAX_POSTS: 5,
+  MAX_POSTS: 7, // Увеличиваем до 7 постов
   NEWS_PATH: path.resolve(__dirname, '../news.json')
 };
 
@@ -21,9 +21,19 @@ async function fetchTelegramDirect() {
   const $ = cheerio.load(response.data);
   const posts = [];
 
-  $('.tgme_widget_message').each((i, el) => {
-    if (i >= CONFIG.MAX_POSTS) return;
-    posts.push($(el).prop('outerHTML').trim());
+  // Игнорируем закрепленные посты и ограничиваем выборку
+  $('.tgme_widget_message:not(.tgme_widget_message_pinned)').each((i, el) => {
+    if (i >= CONFIG.MAX_POSTS) return false; // Прерываем цикл при достижении лимита
+    
+    const messageHtml = $(el).prop('outerHTML').trim();
+    
+    // Проверяем наличие видео в посте
+    const hasVideo = $(el).find('.tgme_widget_message_video').length > 0;
+    if (hasVideo) {
+      console.log(`Post ${i+1} contains video`);
+    }
+    
+    posts.push(messageHtml);
   });
 
   return posts;
@@ -36,7 +46,7 @@ async function main() {
       lastUpdated: new Date().toISOString(),
       fetchMethod: 'direct',
       postsCount: posts.length,
-      posts: posts.reverse()
+      posts: posts // Убрали reverse для сохранения исходного порядка
     };
     
     fs.writeFileSync(CONFIG.NEWS_PATH, JSON.stringify(result, null, 2));
