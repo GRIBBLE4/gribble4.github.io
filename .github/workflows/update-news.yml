@@ -29,7 +29,10 @@ jobs:
 
       - name: Fetch and save news
         run: node scripts/fetch-news.js
-        timeout-minutes: 5
+        timeout-minutes: 8
+        
+      - name: Clear npm cache
+        run: npm cache clean --force
 
       - name: Verify news.json
         run: |
