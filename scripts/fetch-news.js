@@ -5,7 +5,7 @@ const cheerio = require('cheerio');
 
 const CONFIG = {
   TELEGRAM_CHANNEL: 'ordendog',
-  MAX_POSTS: 16,
+  MAX_POSTS: 20,
   NEWS_PATH: path.resolve(__dirname, '../news.json'),
   RETRIES: 2,
   RETRY_DELAY: 1000,
